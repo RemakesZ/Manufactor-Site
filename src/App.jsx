@@ -29,15 +29,15 @@ const DISCOUNT_CODES = {
 // Each row: { id, name, description, category, stl_url, preview_img_url, active }
 // ─────────────────────────────────────────────────────────────────────────────
 const MARKETPLACE_ITEMS = [
-  // SUPABASE: replace this array with a fetch to your marketplace_items table
-  // To add items: just add an object here (or to the DB later)
-  // stlUrl: path to your STL file, previewImg: path to a render/photo
-  { id: "mk1", name: "Flexicat", category: "Art", description: "Articulated flexible cat. Prints in place, no supports. Classic.", stlUrl: "/assets/STLs/catflexi.stl", previewImg: null },
-  { id: "mk2", name: "Cable Clip XL", category: "Utility", description: "Heavy-duty desk cable management clip. Fits up to 8mm cable bundles.", stlUrl: null, previewImg: null },
-  { id: "mk3", name: "Parametric Enclosure", category: "Electronics", description: "Clean electronics enclosure with snap-fit lid and M3 standoffs.", stlUrl: null, previewImg: null },
-  { id: "mk4", name: "Dragon Wall Hook", category: "Utility", description: "Not so low-profile load-bearing wall hook.", stlUrl: "/assets/STLs/dragonwallhook.stl", previewImg: null },
-  { id: "mk5", name: "Miniature Vase", category: "Art", description: "Gyroid-infill decorative vase. Looks different every time.", stlUrl: null, previewImg: null },
-  { id: "mk6", name: "Lens Cap Holder", category: "Photography", description: "Mounts to camera strap. Never lose a lens cap again.", stlUrl: null, previewImg: null },
+  // stlUrl: path relative to your site root — put files in /public/assets/STLs/
+  // previewImg: path to a photo/render, e.g. "/assets/previews/flexicat.jpg"
+  // SUPABASE (future): replace this array with a fetch to your marketplace_items table
+  { id: "mk1", name: "Flexicat", category: "Art", description: "Articulated flexible cat. Prints in place, no supports. Classic.", stlUrl: "/assets/STLs/flexicat.stl", previewImg: null },
+  { id: "mk2", name: "Cable Clip XL", category: "Utility", description: "Heavy-duty desk cable management clip. Fits up to 8mm cable bundles.", stlUrl: "/assets/STLs/cable-clip-xl.stl", previewImg: null },
+  { id: "mk3", name: "Parametric Enclosure", category: "Electronics", description: "Clean electronics enclosure with snap-fit lid and M3 standoffs.", stlUrl: "/assets/STLs/parametric-enclosure.stl", previewImg: null },
+  { id: "mk4", name: "Wall Hook", category: "Utility", description: "Low-profile load-bearing wall hook. 3 mounting hole variants included.", stlUrl: "/assets/STLs/wall-hook.stl", previewImg: null },
+  { id: "mk5", name: "Miniature Vase", category: "Art", description: "Gyroid-infill decorative vase. Looks different every time.", stlUrl: "/assets/STLs/miniature-vase.stl", previewImg: null },
+  { id: "mk6", name: "Lens Cap Holder", category: "Photography", description: "Mounts to camera strap. Never lose a lens cap again.", stlUrl: "/assets/STLs/lens-cap-holder.stl", previewImg: null },
 ];
 
 const CATEGORIES = ["All", "Art", "Utility", "Electronics", "Photography"];
@@ -191,9 +191,9 @@ const T = {
 // ─────────────────────────────────────────────────────────────────────────────
 const MATERIAL_RATES = { PLA: 0.28, PETG: 0.34, ABS: 0.38, ASA: 0.42, TPU: 0.52 };
 const LAYER_MULT = { "0.08": 2.6, "0.10": 2.0, "0.12": 1.6, "0.16": 1.2, "0.20": 1.0, "0.24": 0.88, "0.28": 0.78 };
-const INFILL_MULT = { light: 0.60, standard: 1.0, strong: 1.5, solid: 2, engineering: 3 };
+const INFILL_MULT = { light: 0.60, standard: 1.0, strong: 1.65, solid: 2.4, engineering: 3.6 };
 const POST_ADD = { none: 0, vapor: 14, sand: 20, paint: 45 };
-const MIN_ORDER = 4;
+const MIN_ORDER = 8;
 function volumeDiscount(v) { return v < 5 ? 1.0 : v < 20 ? 0.95 : v < 60 ? 0.88 : v < 150 ? 0.80 : 0.72; }
 
 const COLORS = [
@@ -231,7 +231,7 @@ function parseSTLVolume(buffer) {
 // ─────────────────────────────────────────────────────────────────────────────
 // PARTICLE CANVAS — speed dial: PARTICLE_SPEED
 // ─────────────────────────────────────────────────────────────────────────────
-const PARTICLE_SPEED = 0.2;
+const PARTICLE_SPEED = 0.22;
 
 function ParticleCanvas({ style }) {
   const canvasRef = useRef(null);
@@ -306,8 +306,16 @@ function Typewriter({ slogans }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // STL VIEWER
 // ─────────────────────────────────────────────────────────────────────────────
-function STLViewer({ buffer }) {
+function STLViewer({ buffer, colorHex }) {
   const mountRef = useRef(null); const glRef = useRef(null);
+
+  // When colorHex changes without remounting, just update the material color
+  useEffect(() => {
+    if (!glRef.current?.mat || !colorHex) return;
+    const THREE = window.THREE; if (!THREE) return;
+    glRef.current.mat.color.set(colorHex);
+  }, [colorHex]);
+
   useEffect(() => {
     if (!window.THREE || !buffer) return;
     const THREE = window.THREE; const el = mountRef.current; if (!el) return;
@@ -324,7 +332,7 @@ function STLViewer({ buffer }) {
       geom.setAttribute("position",new THREE.BufferAttribute(pos,3));
     }
     geom.computeVertexNormals(); geom.center();
-    const mat=new THREE.MeshStandardMaterial({color:0x8b1a1a,roughness:.52,metalness:.38});
+    const mat=new THREE.MeshStandardMaterial({color: colorHex || 0x8b1a1a, roughness:.52,metalness:.38});
     const mesh=new THREE.Mesh(geom,mat); scene.add(mesh);
     const box=new THREE.Box3().setFromObject(mesh), size=box.getSize(new THREE.Vector3());
     if(size.x>size.y&&size.x>size.z)mesh.rotation.z=Math.PI/2;
@@ -343,9 +351,9 @@ function STLViewer({ buffer }) {
     dom.addEventListener("pointerdown",onDown);dom.addEventListener("pointermove",onMove);dom.addEventListener("pointerup",onUp);dom.addEventListener("pointercancel",onUp);
     let raf;
     function animate(){raf=requestAnimationFrame(animate);if(autoSpin){theta+=spinDTheta;phi=Math.max(-1.3,Math.min(1.3,phi+spinDPhi));spinDPhi*=.99;}else if(!isDragging){velTheta*=.91;velPhi*=.91;theta+=velTheta;phi=Math.max(-1.3,Math.min(1.3,phi+velPhi));}camPos();renderer.render(scene,camera);}
-    animate(); glRef.current={renderer};
+    animate(); glRef.current={renderer, mat};
     return()=>{cancelAnimationFrame(raf);dom.removeEventListener("pointerdown",onDown);dom.removeEventListener("pointermove",onMove);dom.removeEventListener("pointerup",onUp);renderer.dispose();};
-  },[buffer]);
+  },[buffer]); // colorHex changes handled by separate effect above
   return (
     <div ref={mountRef} style={{width:"100%",height:"280px",overflow:"hidden",background:"rgba(10,3,3,0.75)",border:"1px solid rgba(197,160,80,0.14)",borderRadius:"1px"}}>
       {!buffer&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",fontFamily:"var(--font-mono)",fontSize:".64rem",color:"rgba(232,221,216,0.18)",letterSpacing:".12em"}}>3D PREVIEW</div>}
@@ -354,19 +362,74 @@ function STLViewer({ buffer }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COLOUR PICKER
+// COLOUR PICKER — color wheel + hex input + quick swatches
+// value: { hex: "#rrggbb", name: string }
+// onChange: called with same shape
 // ─────────────────────────────────────────────────────────────────────────────
+const QUICK_SWATCHES = [
+  "#1a1a1a","#f0ede8","#8b1a1a","#a8a8a8","#444444","#e8dbb0",
+  "#1a2a4a","#2a4a2a","#c85a18","#d4aa20","#1a3a7a","#4a1a6a",
+  "#c0272d","#8b4513","#4a90d9","#7cba6a","#e8c84a","#c87890",
+];
+function hexToName(hex) {
+  // Try to find a close named match, otherwise use the hex itself
+  const named = {
+    "#1a1a1a":"Black","#f0ede8":"White","#8b1a1a":"Dark Red","#a8a8a8":"Silver",
+    "#444444":"Dark Grey","#e8dbb0":"Natural","#1a2a4a":"Navy","#2a4a2a":"Forest Green",
+    "#c85a18":"Orange","#d4aa20":"Yellow","#1a3a7a":"Blue","#4a1a6a":"Purple",
+    "#c0272d":"Red","#8b4513":"Brown","#4a90d9":"Sky Blue","#7cba6a":"Green",
+    "#e8c84a":"Gold","#c87890":"Pink",
+  };
+  return named[hex.toLowerCase()] || hex.toUpperCase();
+}
+
 function ColourPicker({ value, onChange, label, disclaimer }) {
   const gl="1px solid rgba(197,160,80,0.28)";
+  const [hexInput, setHexInput] = useState(value?.hex || "#8b1a1a");
+
+  function commitHex(raw) {
+    // Accept with or without # , 3 or 6 digit
+    let h = raw.trim();
+    if (!h.startsWith("#")) h = "#" + h;
+    if (/^#[0-9a-fA-F]{3}$/.test(h)) h = "#" + h[1]+h[1]+h[2]+h[2]+h[3]+h[3];
+    if (/^#[0-9a-fA-F]{6}$/.test(h)) {
+      setHexInput(h);
+      onChange({ hex: h.toLowerCase(), name: hexToName(h.toLowerCase()) });
+    }
+  }
+
   return (
     <div className="form-group">
       <label>{label}</label>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6,marginBottom:9}}>
-        {COLORS.map(c=>(
-          <button key={c.name} title={c.name} onClick={()=>onChange(c)} style={{width:"100%",aspectRatio:"1",border:value?.name===c.name?"2px solid var(--gold)":gl,background:c.hex,cursor:"pointer",borderRadius:1,boxShadow:value?.name===c.name?"0 0 0 1px rgba(197,160,80,0.45)":"none",transition:"all .15s"}}/>
+      {/* Color wheel + hex input row */}
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+        {/* Native color input styled to look like a swatch */}
+        <div style={{position:"relative",width:44,height:44,flexShrink:0}}>
+          <div style={{width:44,height:44,background:value?.hex||"#8b1a1a",border:gl,cursor:"pointer"}}/>
+          <input type="color" value={value?.hex||"#8b1a1a"}
+            onChange={e=>{setHexInput(e.target.value);onChange({hex:e.target.value,name:hexToName(e.target.value)});}}
+            style={{position:"absolute",inset:0,opacity:0,cursor:"pointer",width:"100%",height:"100%"}}/>
+        </div>
+        {/* Hex text input */}
+        <input className="fi" value={hexInput}
+          onChange={e=>setHexInput(e.target.value)}
+          onBlur={e=>commitHex(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&commitHex(hexInput)}
+          placeholder="#8b1a1a"
+          style={{fontFamily:"var(--font-mono)",fontSize:".78rem",letterSpacing:".08em",flex:1}}/>
+        {/* Live preview label */}
+        <span style={{fontFamily:"var(--font-mono)",fontSize:".65rem",color:"var(--text-dim)",letterSpacing:".06em",whiteSpace:"nowrap"}}>
+          {value?.name||""}
+        </span>
+      </div>
+      {/* Quick swatches */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(9,1fr)",gap:5,marginBottom:9}}>
+        {QUICK_SWATCHES.map(hex=>(
+          <button key={hex} title={hexToName(hex)} onClick={()=>{setHexInput(hex);onChange({hex,name:hexToName(hex)});}}
+            style={{width:"100%",aspectRatio:"1",border:value?.hex===hex?"2px solid var(--gold)":"1px solid rgba(197,160,80,0.2)",
+              background:hex,cursor:"pointer",borderRadius:1,transition:"border-color .15s"}}/>
         ))}
       </div>
-      {value&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><div style={{width:11,height:11,background:value.hex,border:gl}}/><span style={{fontFamily:"var(--font-mono)",fontSize:".68rem",color:"var(--text-dim)",letterSpacing:".07em"}}>{value.name}</span></div>}
       <p style={{fontFamily:"var(--font-mono)",fontSize:".62rem",color:"var(--text-dimmer)",letterSpacing:".05em",lineHeight:1.65,fontStyle:"italic"}}>{disclaimer}</p>
     </div>
   );
@@ -377,9 +440,9 @@ function ColourPicker({ value, onChange, label, disclaimer }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Replace src: null with your image paths e.g. src: "/photos/flexicat.jpg"
 const PHOTOS = [
-  { src: null, label: "Flexicat · PLA · Classic" },
+  { src: null, label: "Flexicat · PLA · Vapor Smoothed" },
   { src: null, label: "Enclosure Panel · PETG · Standard" },
-  { src: null, label: "Mechanical Bracket · ABS · Vapor Smoothed" },
+  { src: null, label: "Mechanical Bracket · ABS · Painted" },
   { src: null, label: "Display Model · PLA · Primed" },
   { src: null, label: "Custom Housing · ASA · Raw" },
 ];
@@ -672,6 +735,58 @@ function AccountPage({ lang, user, onSignOut, onReorder }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// NAV BAR — desktop links + mobile hamburger drawer
+// ─────────────────────────────────────────────────────────────────────────────
+function NavBar({ page, setPage, lang, setLang, user, onSignIn, t }) {
+  const [open, setOpen] = useState(false);
+
+  function go(p) { setPage(p); setOpen(false); }
+
+  return (
+    <>
+      <nav>
+        {/* Logo — always visible */}
+        <div className="n-logo" onClick={()=>go("home")}>MAN<em>U</em>FACTOR</div>
+
+        {/* Desktop links */}
+        <div className="n-r">
+          <button className={`nl ${page==="home"?"act":""}`} onClick={()=>go("home")}>{t.nav_home}</button>
+          <button className={`nl ${page==="market"?"act":""}`} onClick={()=>go("market")}>{t.nav_market}</button>
+          <button className={`nl ${page==="quote"?"act":""}`} onClick={()=>go("quote")}>{t.nav_quote}</button>
+          {user
+            ? <button className="n-user" onClick={()=>go("account")}>{user.email.split("@")[0]}</button>
+            : <button className="nl" onClick={onSignIn}>{t.nav_signin}</button>}
+          <div className="lt">
+            <button className={`lb ${lang==="en"?"act":""}`} onClick={()=>setLang("en")}>EN</button>
+            <div className="ls" style={{alignSelf:"stretch"}}/>
+            <button className={`lb ${lang==="gr"?"act":""}`} onClick={()=>setLang("gr")}>ΕΛ</button>
+          </div>
+          {/* Hamburger — shown via CSS on small screens */}
+          <button className={`hbg ${open?"open":""}`} onClick={()=>setOpen(o=>!o)} aria-label="Menu">
+            <span/><span/><span/>
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile drawer */}
+      <div className={`mob-drawer ${open?"open":""}`}>
+        <button className={`mob-nl ${page==="home"?"act":""}`} onClick={()=>go("home")}>{t.nav_home}</button>
+        <button className={`mob-nl ${page==="market"?"act":""}`} onClick={()=>go("market")}>{t.nav_market}</button>
+        <button className={`mob-nl ${page==="quote"?"act":""}`} onClick={()=>go("quote")}>{t.nav_quote}</button>
+        {user
+          ? <button className={`mob-nl ${page==="account"?"act":""}`} onClick={()=>go("account")}>{t.nav_account} — {user.email.split("@")[0]}</button>
+          : <button className="mob-nl" onClick={()=>{setOpen(false);onSignIn();}}>{t.nav_signin}</button>}
+        <div className="mob-lang">
+          <button className={`lb ${lang==="en"?"act":""}`} onClick={()=>setLang("en")}>EN</button>
+          <div className="ls" style={{alignSelf:"stretch"}}/>
+          <button className={`lb ${lang==="gr"?"act":""}`} onClick={()=>setLang("gr")}>ΕΛ</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN APP
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ManufactorApp() {
@@ -744,12 +859,18 @@ export default function ManufactorApp() {
   }
   const onDrop = useCallback(e=>{e.preventDefault();setDragOver(false);handleFile(e.dataTransfer.files[0]);},[]);
 
-  // Pre-fill quote from marketplace item
+  // Pre-fill quote from marketplace item — loads STL directly from /assets/STLs/
   function handleOrderItem(item) {
     setPage("quote");
     setStlName(item.name + ".stl");
-    setStlBuffer(null); setVolume(0); // Reset — will load from stlUrl in prod
-    // SUPABASE: fetch the STL file and parse it:
+    setStlBuffer(null); setVolume(0);
+    if (item.stlUrl) {
+      fetch(item.stlUrl)
+        .then(r => r.arrayBuffer())
+        .then(buf => { setStlBuffer(buf); setVolume(Math.round(parseSTLVolume(buf))); })
+        .catch(() => {}); // silently fail if file missing — viewer shows empty state
+    }
+    // SUPABASE (future): swap fetch above for:
     // const { data } = await supabase.storage.from('marketplace-stls').download(item.stlUrl)
     // const buffer = await data.arrayBuffer()
     // setStlBuffer(buffer); setVolume(Math.round(parseSTLVolume(buffer)))
@@ -812,19 +933,30 @@ export default function ManufactorApp() {
         html{scroll-behavior:smooth;}
         ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:rgba(197,160,80,0.22);}
 
-        nav{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:0 clamp(20px,5vw,72px);height:58px;background:rgba(12,4,4,0.94);backdrop-filter:blur(14px);border-bottom:${gl};}
-        .n-logo{font-family:var(--font-display);font-size:1.48rem;letter-spacing:.14em;color:var(--text);cursor:pointer;user-select:none;}
+        nav{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:0 clamp(16px,4vw,72px);height:58px;background:rgba(12,4,4,0.96);backdrop-filter:blur(14px);border-bottom:${gl};}
+        .n-logo{font-family:var(--font-display);font-size:1.48rem;letter-spacing:.14em;color:var(--text);cursor:pointer;user-select:none;flex-shrink:0;}
         .n-logo em{color:var(--red-bright);font-style:normal;}
         .n-logo img{height:30px;width:auto;object-fit:contain;}
-        .n-r{display:flex;align-items:center;gap:22px;}
-        .nl{font-family:var(--font-cond);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);background:none;border:none;cursor:pointer;transition:color .2s;padding-bottom:2px;}
+        .n-r{display:flex;align-items:center;gap:20px;}
+        .nl{font-family:var(--font-cond);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);background:none;border:none;cursor:pointer;transition:color .2s;padding-bottom:2px;white-space:nowrap;}
         .nl:hover{color:var(--text);}.nl.act{color:var(--text);border-bottom:1px solid var(--gold);}
-        .n-user{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.08em;color:var(--gold);background:rgba(197,160,80,.08);border:${gl};padding:4px 10px;cursor:pointer;transition:background .2s;}
+        .n-user{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.08em;color:var(--gold);background:rgba(197,160,80,.08);border:${gl};padding:4px 10px;cursor:pointer;transition:background .2s;white-space:nowrap;}
         .n-user:hover{background:rgba(197,160,80,.15);}
-        .lt{display:flex;border:${gl};overflow:hidden;}
+        .lt{display:flex;border:${gl};overflow:hidden;flex-shrink:0;}
         .lb{font-family:var(--font-mono);font-size:.64rem;letter-spacing:.08em;padding:4px 9px;background:none;border:none;color:var(--text-dimmer);cursor:pointer;transition:all .18s;}
         .lb.act{background:rgba(197,160,80,.12);color:var(--gold);}
         .ls{width:1px;background:rgba(197,160,80,.25);}
+        .hbg{display:none;flex-direction:column;justify-content:center;gap:5px;background:none;border:none;cursor:pointer;padding:8px;margin-right:-8px;height:40px;}
+        .hbg span{display:block;width:22px;height:1.5px;background:var(--text);transition:all .25s;transform-origin:center;}
+        .hbg.open span:nth-child(1){transform:translateY(6.5px) rotate(45deg);}
+        .hbg.open span:nth-child(2){opacity:0;transform:scaleX(0);}
+        .hbg.open span:nth-child(3){transform:translateY(-6.5px) rotate(-45deg);}
+        .mob-drawer{position:fixed;top:58px;left:0;right:0;z-index:190;background:rgba(10,3,3,0.98);border-bottom:${gl};backdrop-filter:blur(16px);display:flex;flex-direction:column;padding:16px clamp(16px,4vw,32px) 20px;transform:translateY(-110%);transition:transform .26s cubic-bezier(.4,0,.2,1);pointer-events:none;}
+        .mob-drawer.open{transform:translateY(0);pointer-events:all;}
+        .mob-nl{font-family:var(--font-cond);font-size:1.05rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);background:none;border:none;cursor:pointer;text-align:left;padding:13px 0;border-bottom:1px solid rgba(197,160,80,.1);transition:color .2s;width:100%;}
+        .mob-nl:last-of-type{border-bottom:none;}
+        .mob-nl:hover,.mob-nl.act{color:var(--gold);}
+        .mob-lang{display:flex;gap:0;border:${gl};width:fit-content;margin-top:14px;}
 
         .btn-p{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-cond);font-size:.86rem;letter-spacing:.14em;text-transform:uppercase;padding:12px 26px;background:var(--red);color:var(--text);border:none;cursor:pointer;transition:background .22s,transform .18s;}
         .btn-p:hover{background:var(--red-bright);transform:translateY(-1px);}
@@ -918,7 +1050,13 @@ export default function ManufactorApp() {
           .qg{grid-template-columns:1fr;}.qs{position:static;border-right:none;border-top:${gl};}
           .c3g{grid-template-columns:1fr;}.crd{border-right:none;border-bottom:${gl};}.crd:last-child{border-bottom:none;}
           .fr{grid-template-columns:1fr;}
-          .n-r .nl:not(.nlq):not(.nla){display:none;}
+        }
+        @media(max-width:680px){
+          .n-r .nl,.n-r .n-user,.n-r .lt{display:none;}
+          .hbg{display:flex;}
+          .hero{padding:72px 16px 48px;}
+          .hh{font-size:clamp(2.2rem,10vw,3.5rem);}
+          section.s{padding:44px 16px;}
         }
       `}</style>
 
@@ -927,22 +1065,12 @@ export default function ManufactorApp() {
       <CookieBanner lang={lang}/>
 
       {/* NAV */}
-      <nav>
-        <div className="n-logo" onClick={()=>setPage("home")}>MAN<em>U</em>FACTOR</div>
-        <div className="n-r">
-          <button className={`nl ${page==="home"?"act":""}`} onClick={()=>setPage("home")}>{t.nav_home}</button>
-          <button className={`nl ${page==="market"?"act":""}`} onClick={()=>setPage("market")}>{t.nav_market}</button>
-          <button className={`nl nlq ${page==="quote"?"act":""}`} onClick={()=>setPage("quote")}>{t.nav_quote}</button>
-          {user
-            ? <button className="n-user nla" onClick={()=>setPage("account")}>{user.email.split("@")[0]}</button>
-            : <button className="nl nla" onClick={()=>setShowAuth(true)}>{t.nav_signin}</button>}
-          <div className="lt">
-            <button className={`lb ${lang==="en"?"act":""}`} onClick={()=>setLang("en")}>EN</button>
-            <div className="ls" style={{alignSelf:"stretch"}}/>
-            <button className={`lb ${lang==="gr"?"act":""}`} onClick={()=>setLang("gr")}>ΕΛ</button>
-          </div>
-        </div>
-      </nav>
+      <NavBar
+        page={page} setPage={setPage}
+        lang={lang} setLang={setLang}
+        user={user} onSignIn={()=>setShowAuth(true)}
+        t={t}
+      />
 
       {page==="market" && <MarketplacePage lang={lang} onOrderItem={item=>{handleOrderItem(item);}} />}
       {page==="account" && (user
@@ -1089,7 +1217,7 @@ export default function ManufactorApp() {
                 {threeLoaded&&(
                   <div className="form-group">
                     <label>3D Preview {stlBuffer&&<span style={{color:"var(--text-dimmer)",fontSize:".58rem"}}>— drag to rotate</span>}</label>
-                    <STLViewer buffer={stlBuffer}/>
+                    <STLViewer buffer={stlBuffer} colorHex={color?.hex}/>
                   </div>
                 )}
 
